@@ -1,0 +1,1109 @@
+import tkinter
+import customtkinter
+from tkinter import messagebox
+from tkinter.scrolledtext import ScrolledText
+from PIL import Image, ImageTk
+import pandas as pd
+import numpy as np
+from scipy.stats import chi2_contingency,chi2
+import io
+import os
+import seaborn as sns
+from sklearn.model_selection import train_test_split,StratifiedKFold, cross_val_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report,precision_score, recall_score, f1_score, roc_curve, roc_auc_score,auc
+import matplotlib.pyplot as plt
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.neighbors import KNeighborsClassifier
+
+
+
+
+FILE_PATH = 'Test.csv'
+class App(customtkinter.CTk):
+    def __init__(self):
+        super().__init__()
+        self.feature_values = {
+            'Gender': [(1, 'Male'), (2, 'Female')],
+            'Heart_Disease': [(0, 'No MI or CHD'), (1, 'MI or CHD')],
+            'High_Blood_Pressure': [(0, 'No'), (1, 'Yes')],
+            'PhysicalActivity': [(0, 'No Activity'), (1, 'Active')],
+            'High_Cholesterol': [(0, 'No'), (1, 'Yes')],
+            'Stroke': [(0, 'No'), (1, 'Yes')],  # Assuming this is for displaying purpose only
+            'Depression': [(0, 'No'), (1, 'Yes')],
+            'BMI_Category': [(1, 'Underweight'), (2, 'Normal'), (3, 'Overweight'), (4, 'Obese')],
+            'Age_Group': [(1, '18-24'), (2, '25-34'), (3, '35-44'), (4, '45-54'), (5, '55-64'), (6, '65 or older')],
+            'Smoking_Status': [(0, 'Never smoke'), (1, 'Smoke')],
+            'Urban_Status': [(1, 'Urban'), (2, 'Rural')],
+            'Marial_Status': [(1, 'Married'), (2, 'Single'), (3, 'Unmarried couple')],
+            'Vegetable_Intake': [(0, '< 1 time/day'), (1, '>= 1 time/day')],
+            'Fruit_Intake': [(0, '< 1 time/day'), (1, '>= 1 time/day')],
+            'Income_Group': [(1, '< $15,000'), (2, '$15,000-$24,999'), (3, '$25,000-$34,999'), (4, '$35,000-$49,999'),
+                             (5, '$50,000-$99,999'), (6, '$100,000-$199,999'), (7, '>= $200,000')],
+            'Education_Level': [(1, 'No High School'), (2, 'High School Grad'), (3, 'Some College'),
+                                (4, 'College Grad')],
+            'Race': [(1, 'White'), (2, 'Black or African American'), (3, 'American Indian or Alaskan Native'),
+                     (4, 'Asian'), (5, 'Others')],
+            'Diabetes': [(0, 'No'), (1, 'Yes')],
+            'Current_ESmoker': [(0, 'Non-user'), (1, 'User')]
+        }
+        self.title("Brain Stroke Prediction And Data Visualization")
+        self.geometry("1200x700")
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+        self.setup_sidebar()
+        self.home_page()
+        self.page_2()
+        self.page_3()
+        self.setup_model_training_page()
+        self.setup_experiment_page()
+        self.show_frame(self.main_page_frame)
+        self.decision_tree_model = None
+        self.model_performance = {}
+        self.selected_features = []
+        self.text_item_counter = 0
+
+    def setup_sidebar(self):
+        self.sidebar_frame = customtkinter.CTkFrame(self, width=140, corner_radius=0)
+        self.sidebar_frame.grid(row=0, column=0, rowspan=4, sticky="nswe")
+
+        self.logo_label = customtkinter.CTkLabel(self.sidebar_frame, text="Brain Stroke\nPrediction &\nData Visualization", font=customtkinter.CTkFont(size=16, weight="bold"))
+        self.logo_label.pack(pady=20, padx=20)
+
+        self.sidebar_button_3 = customtkinter.CTkButton(self.sidebar_frame, text="Data Preprocessing",
+                                                        command=lambda: self.show_frame(self.page_3_frame))
+        self.sidebar_button_3.pack(pady=10, padx=20)
+
+        self.sidebar_button_4 = customtkinter.CTkButton(self.sidebar_frame, text="Model Training",
+                                                        command=lambda: self.show_frame(self.model_training_frame))
+        self.sidebar_button_4.pack(pady=10, padx=20)
+
+        self.sidebar_button_1 = customtkinter.CTkButton(self.sidebar_frame, text="Brain Stroke Prediction", command=lambda: self.show_frame(self.main_page_frame))
+        self.sidebar_button_1.pack(pady=10, padx=20)
+
+        self.sidebar_button_2 = customtkinter.CTkButton(self.sidebar_frame, text="Data Visualization", command=lambda: self.show_frame(self.page_2_frame))
+        self.sidebar_button_2.pack(pady=10, padx=20)
+
+        self.sidebar_button_experiment = customtkinter.CTkButton(self.sidebar_frame, text="Experiment Page",
+                                                                 command=lambda: self.show_frame(
+                                                                     self.experiment_page_frame))
+        self.sidebar_button_experiment.pack(pady=10, padx=20)
+        self.appearance_mode_label = customtkinter.CTkLabel(self.sidebar_frame, text="Mode:", anchor="w")
+        self.appearance_mode_label.pack(padx=20, pady=(10, 0))  # Use pack instead of grid
+        self.appearance_mode_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
+                                                                       values=["Dark","Light"],
+                                                                       command=self.change_appearance_mode_event)
+        self.appearance_mode_optionemenu.pack(padx=20, pady=(10, 10))
+
+
+
+    def home_page(self):
+        self.main_page_frame = customtkinter.CTkFrame(self)
+        self.main_page_frame.grid(row=0, column=1, sticky="nsew")
+        self.main_page_frame.grid_columnconfigure((0, 1, 2), weight=1)
+        self.main_page_frame.grid_rowconfigure((0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13), weight=1)
+
+        welcome_title = customtkinter.CTkLabel(self.main_page_frame, text="Welcome to Brain Stroke Prediction Interface",
+                                               font=("Helvetica", 30, "bold"),
+                                               wraplength=1000,)
+        welcome_title.grid(row=0, column=0, columnspan=2, pady=20, padx=20, sticky="w")
+
+        description_label = customtkinter.CTkLabel(self.main_page_frame,
+                                                   text="You can assess the risk of getting brain stroke through risk factors of stroke by picking the risk factor you have below.",
+                                                   font=("Helvetica", 20, "bold"),
+                                                   wraplength=750,
+                                                   justify=tkinter.LEFT)
+        description_label.grid(row=1, column=0, columnspan=2, pady=0, padx=20, sticky="w" )
+
+
+
+        self.create_dynamic_ui_elements()
+
+
+
+
+
+
+
+    def page_2(self):
+        self.page_2_frame = customtkinter.CTkFrame(self)
+        self.page_2_frame.grid(row=0, column=1, sticky="nsew")
+        self.page_2_frame.grid_columnconfigure((0, 1, 2), weight=0)
+        self.page_2_frame.grid_rowconfigure((0, 1, 2, 3, 4), weight=0)
+
+        welcome_title = customtkinter.CTkLabel(self.page_2_frame, text="Welcome to Brain Stroke Visualized Data Interface", font=("Helvetica", 30, "bold"))
+        welcome_title.grid(row=0, column=0, columnspan=3, pady=20, padx=20, sticky="w")
+
+        description_label = customtkinter.CTkLabel(self.page_2_frame, text="You can assess the visualized of brain stroke data regarding the risk factors of stroke.", font=("Helvetica", 20, "bold"), wraplength=1000)
+        description_label.grid(row=1, column=0, columnspan=3, pady=(10,0), padx=20, sticky="w")
+
+        # Dropdown for selecting the model
+        self.model_optionmenu = customtkinter.CTkOptionMenu(self.page_2_frame,
+                                                            values=["Decision Tree", "Logistic Regression",
+                                                                    "Random Forest","KNN","Overall"],
+                                                            command=self.update_available_figures)
+        self.model_optionmenu.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
+
+        # Dropdown for selecting the figure type
+        self.figure_type_optionmenu = customtkinter.CTkOptionMenu(self.page_2_frame,
+                                                                  values=["ROC Curve", "Confusion Matrix","KNN Error Rate", "KNN Decision Boundaries"])
+        self.figure_type_optionmenu.grid(row=2, column=1, padx=20, pady=10, sticky="ew")
+
+        # Button to show the selected figure
+        self.show_figure_button = customtkinter.CTkButton(self.page_2_frame, text="Show Figure",
+                                                          command=self.show_selected_figure)
+        self.show_figure_button.grid(row=2, column=2, padx=20, pady=10, sticky="ew")
+
+        # Placeholder for the image
+        self.image_label_page2 = customtkinter.CTkLabel(self.page_2_frame, text="")
+        self.image_label_page2.grid(row=3, column=0, columnspan=2, pady=10, padx=10, sticky="nsew")
+
+    def page_3(self):
+        self.page_3_frame = customtkinter.CTkFrame(self)
+        self.page_3_frame.grid(row=0, column=1, sticky="nsew")
+        self.page_3_frame.grid_columnconfigure((0, 1, 2), weight=1)
+
+        title_label = customtkinter.CTkLabel(self.page_3_frame, text="Data Preprocessing",
+                                             font=("Helvetica", 30, "bold"))
+        title_label.grid(row=0, column=0,columnspan=3, pady=20, padx=20, sticky="w")
+
+        subtitle_label = customtkinter.CTkLabel(self.page_3_frame,
+                                                text="Manage and preprocess your data for better analysis",
+                                                font=("Helvetica", 20, "bold"), wraplength=1000)
+        subtitle_label.grid(row=1, column=0,columnspan=3, pady=(10, 0), padx=20, sticky="w")
+
+        # Button to load and display DataFrame info
+        self.load_data_button = customtkinter.CTkButton(self.page_3_frame, text="Load Data",
+                                                        command=self.load_and_display_data)
+        self.load_data_button.grid(row=2, column=0, padx=20, pady=20, sticky="we")
+
+        # Button to clean data and display results
+        self.clean_data_button = customtkinter.CTkButton(self.page_3_frame, text="Clean Data", command=self.clean_data)
+        self.clean_data_button.grid(row=2, column=1, padx=20, pady=20, sticky="we")
+
+        # Button to perform and display Chi-square test results
+        self.chi_square_button = customtkinter.CTkButton(self.page_3_frame, text="Chi-square Test",
+                                                         command=self.perform_chi_square_test)
+        self.chi_square_button.grid(row=2, column=4, padx=20, pady=20, sticky="we")
+
+        self.impute_data_button = customtkinter.CTkButton(self.page_3_frame, text="Impute Data",
+                                                          command=self.impute_data)
+        self.impute_data_button.grid(row=2, column=2, padx=20, pady=20, sticky="we")
+
+        # Inside your page_3 method
+
+        self.stratified_sampling_button = customtkinter.CTkButton(self.page_3_frame,
+                                                                  text="Perform Stratified Sampling",
+                                                                  command=self.perform_stratified_sampling)
+        self.stratified_sampling_button.grid(row=2, column=3, padx=20, pady=20, sticky="we")
+
+        self.results_text_widget_data_preprocessing = ScrolledText(self.page_3_frame, wrap=tkinter.WORD, font=("Consolas", 10))
+        self.results_text_widget_data_preprocessing.grid(row=3, column=0, columnspan=4, padx=10, pady=10, sticky="nswe")
+        # Ensure the grid cell where the ScrolledText widget is placed is configured to expand and fill space
+        self.page_3_frame.grid_columnconfigure(0, weight=1)
+        self.page_3_frame.grid_rowconfigure(5, weight=1)
+
+    def setup_experiment_page(self):
+        self.experiment_page_frame = customtkinter.CTkFrame(self)
+        self.experiment_page_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+        self.experiment_page_frame.grid_columnconfigure(0, weight=1)
+        self.experiment_page_frame.grid_rowconfigure(0, weight=1)
+
+        # Setup canvas with scrollbar
+        self.canvas = tkinter.Canvas(self.experiment_page_frame, bg="white")
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+
+        scrollbar = tkinter.Scrollbar(self.experiment_page_frame, orient="vertical", command=self.canvas.yview)
+        scrollbar.grid(row=0, column=1, sticky='ns')
+        self.canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Set the scroll region to be large enough
+        self.canvas.config(scrollregion=self.canvas.bbox("all"))
+        # Button for loading data
+        self.load_data_button = customtkinter.CTkButton(self.experiment_page_frame, text="Load Data",
+                                                        command=lambda: self.execute_and_display_on_canvas(
+                                                            self.load_and_display_data))
+        self.load_data_button.place(x=20, y=20)
+
+        # Additional buttons for other data operations
+        self.clean_data_button = customtkinter.CTkButton(self.experiment_page_frame, text="Clean Data",
+                                                         command=lambda: self.execute_and_display_on_canvas(
+                                                             self.clean_data))
+        self.clean_data_button.place(x=20, y=60)
+
+        self.impute_data_button = customtkinter.CTkButton(self.experiment_page_frame, text="Impute Data",
+                                                          command=lambda: self.execute_and_display_on_canvas(
+                                                              self.impute_data))
+        self.impute_data_button.place(x=20, y=100)
+
+        self.stratified_sampling_button = customtkinter.CTkButton(self.experiment_page_frame,
+                                                                  text="Stratified Sampling",
+                                                                  command=lambda: self.execute_and_display_on_canvas(
+                                                                      self.perform_stratified_sampling))
+        self.stratified_sampling_button.place(x=20, y=140)
+
+        self.chi_square_test_button = customtkinter.CTkButton(self.experiment_page_frame, text="Chi-Square Test",
+                                                              command=lambda: self.execute_and_display_on_canvas(
+                                                                  self.perform_chi_square_test))
+        self.chi_square_test_button.place(x=20, y=180)
+
+        # Additional buttons for model training experiments
+        self.decision_tree_button = customtkinter.CTkButton(self.experiment_page_frame, text="Train Decision Tree",
+                                                            command=lambda: self.execute_and_display_on_canvas(
+                                                                self.train_decision_tree))
+        self.decision_tree_button.place(x=20, y=160)
+    def setup_model_training_page(self):
+        self.model_training_frame = customtkinter.CTkFrame(self)
+        self.model_training_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+        self.model_training_frame.grid_columnconfigure((0,1,2,3), weight=1)
+        self.model_training_frame.grid_rowconfigure(5, weight=1)
+
+        title_label = customtkinter.CTkLabel(self.model_training_frame, text="Model Training",
+                                             font=("Helvetica", 30, "bold"))
+        title_label.grid(row=0, column=0, pady=20, padx=20, columnspan=4, sticky="w")
+
+        subtitle_label = customtkinter.CTkLabel(self.model_training_frame,
+                                                text="Train various models and evaluate them",
+                                                font=("Helvetica", 20), wraplength=500)
+        subtitle_label.grid(row=1, column=0, pady=(10, 20), padx=20, columnspan=4, sticky="w")
+
+        # Buttons for model training
+        self.decision_tree_button = customtkinter.CTkButton(self.model_training_frame, text="Decision Tree",
+                                                            command=self.train_decision_tree)
+        self.decision_tree_button.grid(row=2, column=0, pady=10, padx=20, sticky="we")
+
+        self.logistic_regression_button = customtkinter.CTkButton(self.model_training_frame, text="Logistic Regression",
+                                                                  command=self.train_logistic_regression)
+        self.logistic_regression_button.grid(row=2, column=1, pady=10, padx=20, sticky="we")
+
+        self.random_forest_button = customtkinter.CTkButton(self.model_training_frame, text="Random Forest",
+                                                            command=self.train_random_forest)
+        self.random_forest_button.grid(row=2, column=2, pady=10, padx=20, sticky="we")
+
+        self.knn_button = customtkinter.CTkButton(self.model_training_frame, text="K-Nearest Neighbors",
+                                                  command=self.train_knn)
+        self.knn_button.grid(row=2, column=3, pady=10, padx=20, sticky="we")
+
+        # ScrolledText widget for results
+        self.results_text_widget_model_training = ScrolledText(self.model_training_frame, wrap=tkinter.WORD, font=("Consolas", 10))
+        self.results_text_widget_model_training.grid(row=3, column=0, padx=20, pady=20,columnspan=4, sticky="nsew")
+
+        # Placeholder Label for graph, you can replace it later with an actual graph
+        #self.graph_label = customtkinter.CTkLabel(self.model_training_frame, text="Graph will be displayed here",
+                                                  #width=100, height=4)
+        #self.graph_label.grid(row=4, column=0, pady=20, padx=20,columnspan=4, sticky="w")
+
+    def load_and_display_data(self):
+        global dfs
+        dfs = pd.read_csv(FILE_PATH)
+        # Capture the output of dfs.info() to a string
+        buffer = io.StringIO()
+        dfs.info(buf=buffer)
+        info_str = buffer.getvalue()
+        return f"DataFrame Loaded:\n{info_str}"
+        self.results_text_widget_data_preprocessing.delete('1.0', tkinter.END)  # Clear the current contents
+        info_display = f"DataFrame Shape: {dfs.shape}\n\nDataFrame Info:\n{info_str}"
+        self.results_text_widget_data_preprocessing.insert(tkinter.INSERT, info_display)
+
+    def clean_data(self):
+        global dfs
+        dfs['Heart_Disease'] = dfs['Heart_Disease'].replace({2: 0})
+        dfs['High_Blood_Pressure'] = dfs['High_Blood_Pressure'].replace({1: 0, 2: 1, 9: np.nan})
+        dfs['PhysicalActivity'] = dfs['PhysicalActivity'].replace({2: 0, 9: np.nan})
+        dfs['High_Cholesterol'] = dfs['High_Cholesterol'].replace({1: 0, 2: 1, 9: np.nan})
+        dfs['Stroke'] = dfs['Stroke'].replace({2: 0})
+        dfs['Depression'] = dfs['Depression'].replace({2: 0, 7: np.nan, 9: np.nan})
+        dfs['Smoking_Status'] = dfs['Smoking_Status'].replace({2: 1, 3: 1, 4: 0, 9: np.nan})
+        dfs['Marital_Status'] = dfs['Marital_Status'].replace({3: 2, 4: 2, 5: 2, 6: 3, 9: np.nan})
+        dfs['Vegetable_Intake'] = dfs['Vegetable_Intake'].replace({2: 0, 9: np.nan})
+        dfs['Fruit_Intake'] = dfs['Fruit_Intake'].replace({2: 0, 9: np.nan})
+        dfs['Income_Group'] = dfs['Income_Group'].replace({9: np.nan})
+        dfs['Education_Level'] = dfs['Education_Level'].replace({9: np.nan})
+        dfs['Race'] = dfs['Race'].replace({6: 5, 7: 5, 77: np.nan, 99: np.nan})
+        dfs['Diabetes'] = dfs['Diabetes'].replace({2: 0, 3: 0, 4: 0, 7: np.nan, 9: np.nan})
+        dfs['Current_ESmoker'] = dfs['Current_ESmoker'].replace({1: 0, 2: 1, 9: np.nan})
+
+        null_values_after_cleaning = dfs.isnull().sum().to_string()
+        self.results_text_widget_data_preprocessing.delete('1.0', tkinter.END)
+        self.results_text_widget_data_preprocessing.insert(tkinter.INSERT,
+                                                           "Null Values After Cleaning:\n" + null_values_after_cleaning + "\n\n")
+
+        summary = "Null Values After Cleaning:\n" + null_values_after_cleaning + "\n\nData cleaned successfully.\n"
+        summary += f"Remaining NaNs: {dfs.isna().sum().sum()}\n"
+        return summary
+    def impute_data(self):
+        global dfs
+        # Impute missing values here
+        Impute_columns = ['Gender', 'Heart_Disease', 'High_Blood_Pressure', 'PhysicalActivity', 'High_Cholesterol',
+                          'Stroke', 'Depression', 'BMI_Category', 'Age_Group', 'Smoking_Status', 'Urban_Status',
+                          'Marital_Status', 'Vegetable_Intake', 'Fruit_Intake', 'Income_Group', 'Education_Level',
+                          'Race', 'Diabetes', 'Current_ESmoker']
+        for column in Impute_columns:
+            if column in dfs.columns:
+                dfs[column] = dfs[column].fillna(dfs[column].mode()[0])
+
+        # Display null values after imputation
+        null_values_after_imputation = dfs.isnull().sum().to_string()
+        self.results_text_widget_data_preprocessing.delete('1.0', tkinter.END)
+        self.results_text_widget_data_preprocessing.insert(tkinter.INSERT,
+                                                           "Null Values After Imputation:\n" + null_values_after_imputation + "\n")
+
+        summary = "Null Values After Imputation:\n" + null_values_after_imputation + "\n"
+        summary += "Missing values imputed.\n"
+        summary += f"Remaining NaNs after imputation: {dfs.isna().sum().sum()}\n"
+        return summary
+    def perform_stratified_sampling(self):
+        global dfs  # Ensure dfs is the full dataset
+        global balanced_dfs_global
+        if dfs.empty:
+            self.results_text_widget_data_preprocessing.insert(tkinter.END,
+                                                               "Data not loaded. Please load data first.\n")
+            return
+
+        # Define your target counts for 'yes' and 'no' instances
+        target_yes_count = 1700  # Example target count for 'yes'
+        target_no_count = 42000 # Example target count for 'no'
+
+        # Initial dataset breakdown
+        stroke_yes = dfs[dfs['Stroke'] == 1].copy()
+        stroke_no = dfs[dfs['Stroke'] == 0].copy()
+        initial_counts_message = f"Initial 'Yes' count: {len(stroke_yes)}, Initial 'No' count: {len(stroke_no)}"
+        self.results_text_widget_data_preprocessing.insert(tkinter.END, initial_counts_message + "\n")
+
+        # Stratify 'yes' instances if needed
+        if len(stroke_yes) > target_yes_count:
+            sampled_yes = stroke_yes.sample(n=target_yes_count, random_state=42)
+            yes_sampling_message = f"'Yes' Stroke Data After Sampling: {sampled_yes.shape}"
+        else:
+            sampled_yes = stroke_yes
+            yes_sampling_message = "No 'Yes' sampling performed as count is within target."
+
+
+
+        # Stratify 'no' instances if needed
+        if len(stroke_no) > target_no_count:
+            sampled_no = stroke_no.sample(n=target_no_count, random_state=42)
+            no_sampling_message = f"'No' Stroke Data After Sampling: {sampled_no.shape}"
+        else:
+            sampled_no = stroke_no
+            no_sampling_message = "No 'No' sampling performed as count is within target."
+
+
+
+        # Combine sampled 'yes' and 'no' instances
+        balanced_dfs = pd.concat([sampled_yes, sampled_no], ignore_index=True)
+        balanced_dfs_global = balanced_dfs
+
+        self.results_text_widget_data_preprocessing.delete('1.0', tkinter.END)
+
+        self.results_text_widget_data_preprocessing.insert(tkinter.END, yes_sampling_message + "\n")
+        self.results_text_widget_data_preprocessing.insert(tkinter.END, no_sampling_message + "\n")
+        # Display final balanced dataset size
+        final_dataset_message = f"Final Balanced Dataset Size: {len(balanced_dfs)}, Shape: {balanced_dfs.shape}"
+        self.results_text_widget_data_preprocessing.insert(tkinter.END, final_dataset_message + "\n")
+
+        summary = yes_sampling_message + no_sampling_message + final_dataset_message
+        summary += "Stratified sampling performed.\n"
+        summary += f"Dataset size after sampling: {balanced_dfs.shape}\n"
+        return summary
+    def perform_chi_square_test(self):
+        global balanced_dfs_global  # Use the stratified dataset for the chi-square test
+
+        if balanced_dfs_global.empty:
+            self.results_text_widget_data_preprocessing.insert(tkinter.END,
+                                                               "Stratified dataset is empty. Please perform stratified sampling first.\n")
+            return []
+
+        # Use 'balanced_dfs_global' for chi-square analysis instead of 'dfs'
+        target_variable = 'Stroke'
+        parameters = ['Gender', 'Heart_Disease', 'High_Blood_Pressure', 'PhysicalActivity',
+                      'High_Cholesterol', 'Depression', 'BMI_Category', 'Age_Group',
+                      'Smoking_Status', 'Urban_Status', 'Marital_Status', 'Vegetable_Intake',
+                      'Fruit_Intake', 'Income_Group', 'Education_Level', 'Race',
+                      'Diabetes', 'Current_ESmoker']
+
+        chi_square_results = {}
+        selected_features = []
+        output_lines = []
+        for variable in parameters:
+            contingency_table = pd.crosstab(balanced_dfs_global[target_variable], balanced_dfs_global[variable])
+            chi2_stat, p, dof, expected = chi2_contingency(contingency_table)
+            n = contingency_table.sum().sum()  # Total observations
+            alpha = 0.05  # Significance level
+            critical_value = chi2.ppf(1 - alpha, dof)
+            cramers_v = np.sqrt(chi2_stat / (n * (min(contingency_table.shape) - 1)))
+            result = f"{variable}: Chi2={chi2_stat:.2f}, p-value={p:.4f}, Cramer's V={cramers_v:.2f}"
+            output_lines.append(result)
+            chi_square_results[variable] = {
+                'Chi2 Statistic': chi2_stat,
+                'p-value': p,
+                'Degrees of Freedom': dof,
+                'Cramér\'s V': cramers_v,
+                'Critical Value': critical_value,
+                'Result': 'Reject Null Hypothesis' if chi2_stat > critical_value and p < 0.05 and cramers_v > 0.10 else 'Fail to Reject Null Hypothesis'
+            }
+
+            if chi2_stat > critical_value and p < 0.05 and cramers_v > 0.10 :
+                selected_features.append(variable)
+        output_lines.append("Other information about the test")
+
+        self.create_dynamic_ui_elements()
+        self.selected_features = selected_features
+
+        # Display chi-square test results in the ScrolledText widget
+        chi_square_results_df = pd.DataFrame.from_dict(chi_square_results, orient='index').sort_values(by='Cramér\'s V',
+                                                                                          ascending=False)
+        chi_square_results_df['p-value'] = chi_square_results_df['p-value'].round(6)
+        results_display = chi_square_results_df.to_string()
+        self.results_text_widget_data_preprocessing.delete('1.0', tkinter.END)  # Clear the current contents
+        self.results_text_widget_data_preprocessing.insert(tkinter.INSERT,
+                                                           "Chi-square Test Results:\n\n" + results_display)
+        # Convert selected_features list to string for display
+        selected_features_str = ", ".join(selected_features)
+
+        # Insert selected features into the results widget
+        self.results_text_widget_data_preprocessing.insert(tkinter.END,
+                                                           "\nSelected Features based on Chi-square Test: " + selected_features_str + "\n")
+        return selected_features
+
+        return output_lines
+    def train_decision_tree(self):
+        # Ensure the global dataset variable is accessible
+        global balanced_dfs_global
+
+        if balanced_dfs_global.empty:
+            self.results_text_widget_model_training.insert(tkinter.END,
+                                                           "Stratified dataset is empty. Please perform stratified sampling and cleaning first.\n")
+            return
+
+        selected_features = self.perform_chi_square_test()
+        if not selected_features:  # If no features were selected
+            self.results_text_widget_model_training.insert(tkinter.END,
+                                                           "No features selected by chi-square test.\n")
+            return
+
+        # Prepare the data
+        X = balanced_dfs_global[selected_features]
+        y = balanced_dfs_global['Stroke']
+
+        # Split the data into training and test sets
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        # Initialize the Decision Tree Classifier
+        clf = DecisionTreeClassifier(random_state=42)
+
+        # Perform k-fold cross-validation
+        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+        cv_scores = cross_val_score(clf, X_train, y_train, cv=skf,
+                                    scoring='accuracy')  # Can use other scoring metrics as needed
+
+
+
+        # Training on the training set
+        clf.fit(X_train, y_train)
+
+        # Predict on the test set
+        y_pred = clf.predict(X_test)
+        y_pred_proba = clf.predict_proba(X_test)[:, 1]
+        roc_auc = roc_auc_score(y_test, y_pred_proba)
+        self.plot_confusion_matrix(y_test, y_pred, ['No Stroke', 'Stroke'], 'Decision Tree')
+
+        self.model_performance['Decision Tree'] = {
+            'Accuracy': accuracy_score(y_test, y_pred),
+            'ROC AUC': roc_auc_score(y_test, y_pred_proba),
+            # Include other metrics here as needed
+        }
+
+        # Evaluate the model
+        accuracy = accuracy_score(y_test, y_pred)
+        conf_matrix = confusion_matrix(y_test, y_pred)
+        classification_rep = classification_report(y_test, y_pred)
+        roc_auc = roc_auc_score(y_test, y_pred_proba)  # Calculate ROC AUC
+
+        # Plot ROC curve
+        fpr, tpr, thresholds = roc_curve(y_test, y_pred_proba)
+        plt.figure()
+        plt.plot(fpr, tpr, label=f'Decision Tree (area = {roc_auc:.2f})')
+        plt.plot([0, 1], [0, 1], 'k--')  # Random predictions curve
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Receiver Operating Characteristic')
+        plt.legend(loc='lower right')
+
+        plt.savefig("decision_tree_roc_curve.png")
+        plt.close()  # Close the plot to free up memory
+
+        # Example: Making a prediction with sample input
+        # Ensure the sample input has the correct shape
+        #sample_input = pd.DataFrame([[1,1,1]], columns=selected_features)  # Adjust this based on your actual feature set
+        #prediction = clf.predict(sample_input)
+        #prediction_proba = clf.predict_proba(sample_input)
+
+        # Display the model's performance
+        self.results_text_widget_model_training.delete('1.0', tkinter.END)  # Clear any previous content
+        kfold_message = "This if the Kfold cross validation\n"
+        self.results_text_widget_model_training.insert(tkinter.END, kfold_message)
+        # Print each cv score (accuracy) and mean of them
+        for i, score in enumerate(cv_scores, start=1):
+            self.results_text_widget_model_training.insert(tkinter.END, f"Fold {i}: {score:.4f}\n")
+        cv_scores_mean = cv_scores.mean()
+        self.results_text_widget_model_training.insert(tkinter.END, f"5-Fold CV Score: {cv_scores_mean:.4f}\n\n")
+        result_message = f"Decision Tree Model Training Completed.\n\nAccuracy: {accuracy}\n\nROC AUC: {roc_auc}\n\n"
+        result_message += f"Confusion Matrix:\n\n{conf_matrix}\n\n"
+        result_message += f"Classification Report:\n\n{classification_rep}"
+
+
+        self.results_text_widget_model_training.insert(tkinter.END, result_message)
+        #prediction_text = "Prediction result for the sample input: {}\n".format(prediction)
+        # Formatting predicted probabilities to 3 decimal places
+        #probabilities_text = "Predicted probabilities: [{}]".format(
+        #    ', '.join(["{:.3f}".format(prob) for prob in prediction_proba[0]]))
+
+        #self.results_text_widget_model_training.insert(tkinter.END, prediction_text + probabilities_text)
+        selected_features_str = ", ".join(selected_features)
+        self.results_text_widget_model_training.insert(tkinter.END,
+                                                       "Using selected features for training: " + selected_features_str + "\n")
+        self.decision_tree_model = clf
+
+        result = (
+            f"Decision Tree Model Training Completed.\n"
+            f"5-Fold CV Average Accuracy: {cv_scores_mean:.2f}\n"
+            f"Test Set Accuracy: {accuracy:.2f}\n"
+            f"Confusion Matrix:\n{conf_matrix}\n"
+
+        )
+        return result
+    def train_logistic_regression(self):
+        global balanced_dfs_global
+
+        if balanced_dfs_global.empty:
+            self.results_text_widget_model_training.insert(tkinter.END,
+                                                           "Stratified dataset is empty. Please perform stratified sampling and cleaning first.\n")
+            return
+
+        selected_features = self.perform_chi_square_test()
+        if not selected_features:  # If no features were selected
+            self.results_text_widget_model_training.insert(tkinter.END,
+                                                           "No features selected by chi-square test.\n")
+            return
+
+            # Display the selected features again in the model training results widget
+
+        # Prepare the data
+        X = balanced_dfs_global[selected_features]
+        y = balanced_dfs_global['Stroke']
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        logreg = LogisticRegression(random_state=42, solver='liblinear')
+
+        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+        cv_scores = cross_val_score(logreg, X_train, y_train, cv=skf,
+                                    scoring='accuracy')  # Can use other scoring metrics as needed
+
+        logreg.fit(X_train, y_train)
+
+        y_pred = logreg.predict(X_test)
+        y_pred_proba = logreg.predict_proba(X_test)[:, 1]
+        roc_auc = roc_auc_score(y_test, y_pred_proba)
+
+        self.plot_confusion_matrix(y_test, y_pred, ['No Stroke', 'Stroke'], 'Logistic Regression')
+
+        self.model_performance['Logistic Regression'] = {
+            'Accuracy': accuracy_score(y_test, y_pred),
+            'ROC AUC': roc_auc_score(y_test, y_pred_proba),
+            # Include other metrics here as needed
+        }
+        accuracy = accuracy_score(y_test, y_pred)
+        conf_matrix = confusion_matrix(y_test, y_pred)
+        classification_rep = classification_report(y_test, y_pred)
+        roc_auc = roc_auc_score(y_test, y_pred_proba)
+
+        fpr, tpr, thresholds = roc_curve(y_test, y_pred_proba)
+        plt.figure()
+        plt.plot(fpr, tpr, label=f'Logistic Regression (area = {roc_auc:.2f})')
+        plt.plot([0, 1], [0, 1], 'k--')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Receiver Operating Characteristic - Logistic Regression')
+        plt.legend(loc='lower right')
+        plt.savefig("logistic_regression_roc_curve.png")
+        plt.close()
+
+        self.results_text_widget_model_training.delete('1.0', tkinter.END)
+        kfold_message = "This if the Kfold cross validation\n"
+        self.results_text_widget_model_training.insert(tkinter.END, kfold_message)
+        # Print each cv score (accuracy) and mean of them
+        for i, score in enumerate(cv_scores, start=1):
+            self.results_text_widget_model_training.insert(tkinter.END, f"Fold {i}: {score:.4f}\n")
+        cv_scores_mean = cv_scores.mean()
+        self.results_text_widget_model_training.insert(tkinter.END, f"5-Fold CV Score: {cv_scores_mean:.4f}\n\n")
+
+        result_message = f"Logistic Regression Model Training Completed.\n\nAccuracy: {accuracy}\n\nROC AUC: {roc_auc}\\nn"
+        result_message += f"Confusion Matrix:\n\n{conf_matrix}\n\nClassification Report:\n\n{classification_rep}"
+        self.results_text_widget_model_training.insert(tkinter.END, result_message)
+        selected_features_str = ", ".join(selected_features)
+        self.results_text_widget_model_training.insert(tkinter.END,
+                                                       "Using selected features for training: " + selected_features_str + "\n")
+
+    def train_random_forest(self):
+        global balanced_dfs_global
+
+        if balanced_dfs_global.empty:
+            self.results_text_widget_model_training.insert(tkinter.END,
+                                                           "Stratified dataset is empty. Please perform stratified sampling and cleaning first.\n")
+            return
+
+        selected_features = self.perform_chi_square_test()
+        if not selected_features:  # If no features were selected
+            self.results_text_widget_model_training.insert(tkinter.END,
+                                                           "No features selected by chi-square test.\n")
+            return
+
+            # Display the selected features again in the model training results widget
+
+        # Prepare the data
+        X = balanced_dfs_global[selected_features]
+        y = balanced_dfs_global['Stroke']
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        rf = RandomForestClassifier(n_estimators=100, random_state=42)
+
+        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+        cv_scores = cross_val_score(rf, X_train, y_train, cv=skf,
+                                    scoring='accuracy')  # Can use other scoring metrics as needed
+
+        rf.fit(X_train, y_train)
+
+
+        y_pred = rf.predict(X_test)
+        y_pred_proba = rf.predict_proba(X_test)[:, 1]
+        roc_auc = roc_auc_score(y_test, y_pred_proba)
+
+        self.plot_confusion_matrix(y_test, y_pred, ['No Stroke', 'Stroke'], 'Random Forest')
+
+        self.model_performance['Random Forest'] = {
+            'Accuracy': accuracy_score(y_test, y_pred),
+            'ROC AUC': roc_auc_score(y_test, y_pred_proba),
+            # Include other metrics here as needed
+        }
+
+        accuracy = accuracy_score(y_test, y_pred)
+        conf_matrix = confusion_matrix(y_test, y_pred)
+        classification_rep = classification_report(y_test, y_pred)
+        roc_auc = roc_auc_score(y_test, y_pred_proba)
+
+        fpr, tpr, thresholds = roc_curve(y_test, y_pred_proba)
+        plt.figure()
+        plt.plot(fpr, tpr, label=f'Random Forest (area = {roc_auc:.2f})')
+        plt.plot([0, 1], [0, 1], 'k--')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Receiver Operating Characteristic - Random Forest')
+        plt.legend(loc='lower right')
+        plt.savefig("random_forest_roc_curve.png")
+        plt.close()
+
+        self.results_text_widget_model_training.delete('1.0', tkinter.END)
+        kfold_message = "This if the Kfold cross validation\n"
+        self.results_text_widget_model_training.insert(tkinter.END, kfold_message)
+
+        # Print each cv score (accuracy) and mean of them
+        for i, score in enumerate(cv_scores, start=1):
+            self.results_text_widget_model_training.insert(tkinter.END, f"Fold {i}: {score:.4f}\n")
+        cv_scores_mean = cv_scores.mean()
+        self.results_text_widget_model_training.insert(tkinter.END, f"5-Fold CV Score: {cv_scores_mean:.4f}\n\n")
+        result_message = f"Random Forest Model Training Completed.\n\nAccuracy: {accuracy}\n\nROC AUC: {roc_auc}\n\n"
+        result_message += f"Confusion Matrix:\n\n{conf_matrix}\n\nClassification Report:\n\n{classification_rep}"
+        self.results_text_widget_model_training.insert(tkinter.END, result_message)
+        selected_features_str = ", ".join(selected_features)
+        self.results_text_widget_model_training.insert(tkinter.END,
+                                                       "Using selected features for training: " + selected_features_str + "\n")
+
+
+    def train_knn(self):
+        global balanced_dfs_global
+
+        if balanced_dfs_global.empty:
+            self.results_text_widget_model_training.insert(tkinter.END,
+                                                           "Stratified dataset is empty. Please perform stratified sampling and cleaning first.\n")
+            return
+
+        selected_features = self.perform_chi_square_test()
+        if not selected_features:  # If no features were selected
+            self.results_text_widget_model_training.insert(tkinter.END,
+                                                           "No features selected by chi-square test.\n")
+            return
+
+        # Prepare the data
+        X = balanced_dfs_global[selected_features]
+        y = balanced_dfs_global['Stroke']
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        # Initialize the KNN Classifier
+        knn = KNeighborsClassifier(n_neighbors=5)
+
+        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+        cv_scores = cross_val_score(knn, X_train, y_train, cv=skf,
+                                    scoring='accuracy')  # Can use other scoring metrics as needed
+
+        # Fit the model
+        knn.fit(X_train, y_train)
+
+
+
+        # Make predictions
+        y_pred = knn.predict(X_test)
+        y_pred_proba = knn.predict_proba(X_test)[:, 1]
+
+        # Find optimal K
+
+        roc_auc = roc_auc_score(y_test, y_pred_proba)
+        self.plot_confusion_matrix(y_test, y_pred, ['No Stroke', 'Stroke'], 'KNN')
+
+        self.model_performance['KNN'] = {
+            'Accuracy': accuracy_score(y_test, y_pred),
+            'ROC AUC': roc_auc_score(y_test, y_pred_proba),
+            # Include other metrics here as needed
+        }
+
+        error_rates = self.find_optimal_k(X_train, X_test, y_train, y_test, max_k=40)
+
+        # Plotting error rates
+        plt.figure(figsize=(10, 6))
+        plt.plot(range(1, 41), error_rates, color='blue', linestyle='dashed', marker='o',
+                 markerfacecolor='red', markersize=10)
+        plt.title('Error Rate vs. K Value')
+        plt.xlabel('K')
+        plt.ylabel('Error Rate')
+        plt.savefig("knn_error_rate.png")
+
+        # Plot ROC curve
+        fpr, tpr, thresholds = roc_curve(y_test, y_pred_proba)
+        plt.figure()
+        plt.plot(fpr, tpr, label=f'KNN (area = {roc_auc:.2f})')
+        plt.plot([0, 1], [0, 1], 'k--')  # Random predictions curve
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Receiver Operating Characteristic')
+        plt.legend(loc='lower right')
+
+        plt.savefig("knn_roc_curve.png")
+        plt.close()  # Close the plot to free up memory
+
+        target_variable = 'Stroke'
+
+        # Set the style of seaborn
+        sns.set(style="whitegrid")
+
+        # Plotting and saving the plots
+        for feature in selected_features:
+            plt.figure(figsize=(10, 6))
+            sns.scatterplot(x=balanced_dfs_global[feature], y=balanced_dfs_global[target_variable], hue=balanced_dfs_global[target_variable], palette="viridis", alpha=0.6)
+            plt.title(f'{feature} vs {target_variable}')
+            plt.xlabel(f'{feature}')
+            plt.ylabel(f'{target_variable}')
+
+            # Save the plot
+            plt.savefig(f"{feature}_vs_{target_variable}.png")
+
+            # Close the plot
+            plt.close()
+        # Evaluate the model
+        accuracy = accuracy_score(y_test, y_pred)
+        roc_auc = roc_auc_score(y_test, y_pred_proba)
+        conf_matrix = confusion_matrix(y_test, y_pred)
+        classification_rep = classification_report(y_test, y_pred)
+
+
+        # Display the model's performance
+        self.results_text_widget_model_training.delete('1.0', tkinter.END)
+        kfold_message = "This if the Kfold cross validation\n"
+        self.results_text_widget_model_training.insert(tkinter.END, kfold_message)
+
+        for i, score in enumerate(cv_scores, start=1):
+            self.results_text_widget_model_training.insert(tkinter.END, f"Fold {i}: {score:.4f}\n")
+        cv_scores_mean = cv_scores.mean()
+        self.results_text_widget_model_training.insert(tkinter.END, f"5-Fold CV Score: {cv_scores_mean:.4f}\n\n")
+        result_message = f"K-Nearest Neighbors Model Training Completed.\n\nAccuracy: {accuracy}\n\nROC AUC: {roc_auc}\n\n"
+        result_message += f"Confusion Matrix:\n\n{conf_matrix}\n\nClassification Report:\n\n{classification_rep}"
+        self.results_text_widget_model_training.insert(tkinter.END, result_message)
+        selected_features_str = ", ".join(selected_features)
+        self.results_text_widget_model_training.insert(tkinter.END,
+                                                       "Using selected features for training: " + selected_features_str + "\n\n")
+        self.plot_model_performance()
+    def show_predictions(self):
+        selected_option = self.optionmenu_1_page2.get()
+        image_path = self.get_image_path(selected_option)
+        self.display_image(image_path)
+
+
+    def display_image(self, image_path):
+
+        if not os.path.exists(image_path):
+            print(f"Error loading image: {image_path} does not exist")
+            messagebox.showerror("Error", f"Cannot load image: {image_path} does not exist")
+            return
+        try:
+            image = Image.open(image_path)
+            image = image.resize((500, 500), Image.Resampling.LANCZOS)
+            photo = ImageTk.PhotoImage(image)
+            self.image_label_page2.configure(image=photo)
+            self.image_label_page2.image = photo  # Reference to avoid garbage collection
+        except Exception as e:
+            print(f"Error loading image: {e}")
+
+    def update_visualization_image(self, image_path):
+        try:
+            image = Image.open(image_path)
+            image = image.resize((500, 500), Image.Resampling.LANCZOS)
+            photo = ImageTk.PhotoImage(image)
+            self.image_label_page2.configure(image=photo)
+            self.image_label_page2.image = photo
+        except Exception as e:
+            print(f"Error loading image: {e}")
+
+    def plot_confusion_matrix(self, y_true, y_pred, classes, model_name):
+        # Replace spaces with underscores and convert to lowercase for consistency
+        filename_model_name = model_name.replace(" ",
+                                                 "_").lower()  # For example, 'Decision Tree' becomes 'decision_tree'
+
+        # Compute confusion matrix
+        cm = confusion_matrix(y_true, y_pred)
+        fig, ax = plt.subplots()
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax)
+        ax.set_xlabel('Predicted')
+        ax.set_ylabel('True')
+        ax.set_title('Confusion Matrix - ' + model_name)
+        ax.set_xticklabels(classes)
+        ax.set_yticklabels(classes)
+
+        plt.savefig(filename_model_name + '_confusion_matrix.png')
+        plt.close()
+
+
+    def find_optimal_k(self, X_train, X_test, y_train, y_test, max_k=40):
+        from sklearn.neighbors import KNeighborsClassifier
+        error_rates = []
+
+        for i in range(1, max_k + 1):
+            knn = KNeighborsClassifier(n_neighbors=i)
+            knn.fit(X_train, y_train)
+            pred_i = knn.predict(X_test)
+            error_rates.append(np.mean(pred_i != y_test))
+
+        return error_rates
+
+    def show_selected_figure(self):
+        model_name = self.model_optionmenu.get()
+        figure_type = self.figure_type_optionmenu.get()
+
+        # Adjust the logic to display the overall ROC curve image
+        if model_name == "Overall" and figure_type == "ROC Curve":
+            image_path = "overall_roc_curve.png"
+        elif model_name == "KNN" and figure_type == "KNN Error Rate":
+            image_path = "knn_roc_curve.png"
+        elif model_name == "KNN" and figure_type == "KNN Decision Boundaries":
+            image_path = "overall_roc_curve.png"
+        else:
+            model_name_formatted = model_name.replace(" ", "_").lower()  # Standardize the model name format
+            figure_type_formatted = figure_type.replace(" ", "_").lower()
+            image_path = f"{model_name_formatted}_{figure_type_formatted}.png"
+
+        if not os.path.exists(image_path):
+            messagebox.showerror("Error", f"Cannot load image: {image_path} does not exist")
+            return
+
+        try:
+            image = Image.open(image_path)
+            image = image.resize((500, 500), Image.Resampling.LANCZOS)
+            photo = ImageTk.PhotoImage(image)
+            self.image_label_page2.configure(image=photo)
+            self.image_label_page2.image = photo  # Keep a reference to avoid garbage collection
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load image: {image_path}\n{e}")
+
+    def update_available_figures(self, event=None):
+        # Example model-to-figures mapping (assuming all models have the same figures for simplicity)
+        model_figures = {
+            "Overall": ["ROC Curve"],
+            "Decision Tree": ["ROC Curve", "Confusion Matrix"],
+            "KNN": ["ROC Curve", "Confusion Matrix","KNN Error Rate", "KNN Decision Boundaries"],
+            "Logistic Regression": ["ROC Curve", "Confusion Matrix"],
+            "Random Forest": ["ROC Curve", "Confusion Matrix"]
+            # If models had different available figures, they would be listed differently above
+        }
+
+        selected_model = self.model_optionmenu.get()
+        available_figures = model_figures[selected_model]
+
+        # Update figure type optionmenu with the available figures for the selected model
+        self.figure_type_optionmenu.set_values(available_figures)
+        self.figure_type_optionmenu.set(available_figures[0])  # Set to first available figure as default
+
+    def show_prediction(self):
+        if not self.decision_tree_model:
+            self.prediction_label.configure(text="Please train the model first.")
+            return
+
+        feature_values = []
+        for feature, menu in self.dynamic_option_menus.items():
+            selected_label = menu.get()  # Get the selected label from UI
+            # Find the corresponding value
+            for value, label in self.feature_values[feature]:
+                if label == selected_label:
+                    feature_values.append(value)
+                    break
+
+        # Ensure the feature values are in the correct format for your model
+        # This might involve converting them to floats or integers, reshaping, etc.
+        features = np.array([feature_values]).astype(np.float32)  # Adjust type as needed
+
+        # Predict using the decision tree model
+        prediction = self.decision_tree_model.predict(features)
+        prediction_proba = self.decision_tree_model.predict_proba(features)
+
+        # Get the probability for the predicted class
+        stroke_probability = prediction_proba[0][prediction[0]] * 100  # Convert to percentage
+
+        # Display the result with probability
+        result_text = f"Risk of Stroke: {'Yes' if prediction[0] == 1 else 'No'}\nProbability: {stroke_probability:.2f}%"
+        self.prediction_label.configure(text=result_text)
+
+    def plot_model_performance(self):
+
+
+        # Dynamically determine available metrics to avoid KeyError
+        metrics = set()
+        for model_metrics in self.model_performance.values():
+            metrics.update(model_metrics.keys())
+        metrics = list(metrics)
+
+        performances = {metric: [] for metric in metrics}
+        models = list(self.model_performance.keys())
+
+        # Collecting performances for each metric
+        for model in models:
+            for metric in metrics:
+                performances[metric].append(self.model_performance[model].get(metric, np.nan))
+
+        # Plotting
+        x = np.arange(len(models))
+        width = 0.15
+
+        fig, ax = plt.subplots()
+        for i, metric in enumerate(metrics):
+            ax.bar(x + i * width, performances[metric], width, label=metric)
+
+        ax.set_xlabel('Models')
+        ax.set_title('Performance Metrics by Model')
+        ax.set_xticks(x + width * len(metrics) / 2 - width / 2)
+        ax.set_xticklabels(models)
+        ax.legend()
+
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+
+        plt.savefig("overall_roc_curve.png")
+        plt.close()
+
+    def create_dynamic_ui_elements(self):
+
+        if not hasattr(self, 'selected_features') or not self.selected_features:
+            # selected_features not set or empty; return early or display a message
+            print("Selected features not yet determined.")
+            return
+        row = 2  # Starting row for dynamic elements
+        self.dynamic_option_menus = {}  # Resetting dynamic option menus
+        for feature, options in self.feature_values.items():
+            if feature not in self.selected_features:  # Skip if feature is not selected
+                continue
+            label_text = f"This is for {feature}"
+            label = customtkinter.CTkLabel(self.main_page_frame, text=label_text, font=("Helvetica", 14))
+            label.grid(row=row, column=0, padx=20, pady=(10, 0), sticky="w")
+
+            option_values = [label for value, label in options]  # Getting option labels
+            option_menu = customtkinter.CTkOptionMenu(self.main_page_frame, values=option_values,
+                                                      dynamic_resizing=False)
+            option_menu.grid(row=row + 1, column=0, padx=20, pady=20, sticky="we")
+
+            self.dynamic_option_menus[feature] = option_menu
+            row += 2
+        self.predict_button = customtkinter.CTkButton(self.main_page_frame, text="Predict Stroke",
+                                                      command=self.show_prediction)
+        self.predict_button.grid(row=row+1, column=0, pady=20, padx=20, sticky="we")
+
+        self.prediction_label = customtkinter.CTkLabel(self.main_page_frame, text="", font=("Helvetica", 20),
+                                                       wraplength=750,
+                                                       justify=tkinter.LEFT)
+        self.prediction_label.grid(row=row+1, column=1, columnspan=2, pady=(50, 0), padx=10, sticky="w")
+
+    def show_frame(self, frame):
+        frame.tkraise()
+
+    def change_appearance_mode_event(self, new_appearance_mode: str):
+        customtkinter.set_appearance_mode(new_appearance_mode)
+
+    def start_drag(self, event, item_id):
+        self.current_item = item_id
+        self.drag_start_x = event.x
+        self.drag_start_y = event.y
+
+    def do_drag(self, event, item_id):
+        # Calculate the distance moved and update current item's position
+        dx = event.x - self.drag_start_x
+        dy = event.y - self.drag_start_y
+
+        self.canvas.move(item_id, dx, dy)
+
+        # Update the drag start position for the next movement
+        self.drag_start_x = event.x
+        self.drag_start_y = event.y
+
+    def execute_and_display_on_canvas(self, function):
+        result_text = function()
+        if not hasattr(self, 'last_y_position'):
+            self.last_y_position = 50  # Initialize it if it doesn't exist
+        else:
+            self.last_y_position += 40  # Slightly increase the increment for visual spacing
+
+        # Create a unique tag for each group of items (text and its border)
+        item_group_tag = f"group_{self.text_item_counter}"
+        self.text_item_counter += 1
+
+        # Calculate text position
+        text_x, text_y = 10, self.last_y_position
+
+        # Create text item
+        text_id = self.canvas.create_text(text_x, text_y, text=result_text, tags=(item_group_tag,), anchor="nw")
+
+        # Get text bounding box
+        bbox = self.canvas.bbox(text_id)
+        # Adjust bbox slightly to create a margin around the text
+        margin = 10
+        bbox_with_margin = (bbox[0] - margin, bbox[1] - margin, bbox[2] + margin, bbox[3] + margin)
+
+        # Create a rectangle with a slight margin around the text
+        rect_id = self.canvas.create_rectangle(bbox_with_margin, outline="black", fill="light grey", width=2,
+                                               tags=(item_group_tag,))
+
+        # Move the rectangle to the background, so the text appears on top
+        self.canvas.tag_lower(rect_id, text_id)
+
+        # Bind dragging events to the group tag, so both text and rectangle move together
+        self.canvas.tag_bind(item_group_tag, "<Button-1>",
+                             lambda event, tag=item_group_tag: self.start_drag(event, tag))
+        self.canvas.tag_bind(item_group_tag, "<B1-Motion>", lambda event, tag=item_group_tag: self.do_drag(event, tag))
+
+
+if __name__ == "__main__":
+    app = App()
+    app.mainloop()
